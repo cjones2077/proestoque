@@ -26,7 +26,6 @@ export default function CadastroScreen() {
   const [senhaError, setSenhaError] = useState('');
 
   function handleCadastro() {
-    // Validação de senhas
     if (senha !== confirmarSenha) {
       setSenhaError('As senhas não coincidem');
       return;
@@ -35,7 +34,6 @@ export default function CadastroScreen() {
     setSenhaError('');
     setLoading(true);
 
-    // Simula loading de 2 segundos
     setTimeout(() => {
       setLoading(false);
       Alert.alert('Sucesso', 'Conta criada com sucesso!', [
