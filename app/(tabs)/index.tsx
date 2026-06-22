@@ -7,13 +7,15 @@ import {
   RefreshControl,
   SafeAreaView
 } from 'react-native';
-import { PRODUTOS_MOCK, Produto, StatusEstoque } from '../../src/data/mockData';
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useProducts } from '../../src/contexts/ProductsContext';
+import { Produto } from '../../src/schemas/produtoSchema';
 
 export default function Home() {
   const { user } = useAuth();
+  const { produtos } = useProducts();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = () => {
@@ -25,16 +27,16 @@ export default function Home() {
   };
 
   // Cálculos para o Dashboard
-  const totalItens = PRODUTOS_MOCK.reduce((acc, curr) => acc + curr.quantidade, 0);
-  const totalAlertas = PRODUTOS_MOCK.filter(p => p.status !== 'Normal').length;
-  const categoriasUnicas = new Set(PRODUTOS_MOCK.map(p => p.categoria)).size;
-  const valorTotal = PRODUTOS_MOCK.reduce((acc, curr) => acc + (curr.preco * curr.quantidade), 0);
+  const totalProdutos = produtos.length;
+  const totalAlertas = produtos.filter(p => p.quantidade <= p.quantidadeMinima).length;
+  const categoriasUnicas = new Set(produtos.map(p => p.categoria)).size;
+  const valorTotal = produtos.reduce((acc, curr) => acc + (curr.preco * curr.quantidade), 0);
 
   const dataAtual = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(new Date());
 
-  const produtosCriticos = PRODUTOS_MOCK.filter(p => p.status === 'Sem estoque' || p.status === 'Baixo');
+  const produtosCriticos = produtos.filter(p => p.status === 'Sem estoque' || p.status === 'Baixo');
 
-  const getStatusColor = (status: StatusEstoque) => {
+  const getStatusColor = (status: 'Normal' | 'Baixo' | 'Sem estoque') => {
     switch (status) {
       case 'Normal': return COLORS.success;
       case 'Baixo': return COLORS.warning;
@@ -60,7 +62,7 @@ export default function Home() {
   );
 
   const dashboardCards = [
-    { title: 'Total de Itens', value: totalItens, icon: 'cube-outline', color: COLORS.primary },
+    { title: 'Total de Produtos', value: totalProdutos, icon: 'cube-outline', color: COLORS.primary },
     { title: 'Alertas', value: totalAlertas, icon: 'warning-outline', color: COLORS.warning },
     { title: 'Categorias', value: categoriasUnicas, icon: 'grid-outline', color: COLORS.info },
     { title: 'Valor Total', value: formatCurrency(valorTotal), icon: 'cash-outline', color: COLORS.success },
@@ -127,7 +129,7 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
-        data={PRODUTOS_MOCK.slice(0, 5)} // Mostra apenas os 5 primeiros como recentes
+        data={produtos.slice(0, 5)} // Mostra apenas os 5 primeiros como recentes
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
