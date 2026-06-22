@@ -1,15 +1,46 @@
-// app/_layout.tsx
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
+import SplashScreen from '../src/components/SplashScreen';
+import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+
+function NavigationGuard() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const inTabsGroup = segments[0] === '(tabs)';
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (!isAuthenticated && inTabsGroup) {
+      // Se não estiver logado e tentar acessar o grupo (tabs), redireciona para o login
+      router.replace('/(auth)/login');
+    } else if (isAuthenticated && inAuthGroup) {
+      // Se estiver logado e tentar acessar rotas de autenticação (como login), redireciona para as tabs
+      router.replace('/(tabs)');
+    }
+  }, [isAuthenticated, segments, isLoading, router]);
+
+  if (isLoading) {
+    return <SplashScreen />;
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(tabs)" />
+    </Stack>
+  );
+}
 
 export default function RootLayout() {
   return (
-    <>
+    <AuthProvider>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-    </>
+      <NavigationGuard />
+    </AuthProvider>
   );
 }

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -16,17 +17,25 @@ import Input from '../../src/components/Input';
 import Button from '../../src/components/Button';
 import { COLORS, FONT_SIZE, SPACING } from '../../src/constants/theme';
 
+import { useAuth } from '../../src/contexts/AuthContext';
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [loading, setLoading] = useState(false);
+  const { login, isLoading } = useAuth();
 
-  function handleLogin() {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      router.replace('/(tabs)');
-    }, 1500);
+  async function handleLogin() {
+    if (!email.trim() || !senha.trim()) {
+      Alert.alert('Aviso', 'Por favor, preencha o e-mail e a senha.');
+      return;
+    }
+
+    try {
+      await login(email, senha);
+    } catch (error) {
+      console.error('Erro de login:', error);
+      Alert.alert('Erro', 'Falha ao realizar login. Tente novamente.');
+    }
   }
 
   return (
@@ -82,7 +91,7 @@ export default function LoginScreen() {
               title="Entrar"
               onPress={handleLogin}
               fullWidth
-              loading={loading}
+              loading={isLoading}
             />
           </View>
 

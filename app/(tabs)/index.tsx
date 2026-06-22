@@ -10,8 +10,10 @@ import {
 import { PRODUTOS_MOCK, Produto, StatusEstoque } from '../../src/data/mockData';
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 export default function Home() {
+  const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = () => {
@@ -64,12 +66,27 @@ export default function Home() {
     { title: 'Valor Total', value: formatCurrency(valorTotal), icon: 'cash-outline', color: COLORS.success },
   ] as const;
 
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      <View style={styles.greetingContainer}>
-        <Text style={styles.greetingText}>Olá, Usuário</Text>
-        <Text style={styles.dateText}>{dataAtual}</Text>
-      </View>
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  const renderHeader = () => {
+    const firstLetter = user?.nome ? user.nome.charAt(0).toUpperCase() : 'U';
+
+    return (
+      <View style={styles.headerContainer}>
+        <View style={styles.headerRow}>
+          <View style={styles.greetingContainer}>
+            <Text style={styles.greetingText}>{getGreeting()}, {user?.nome || 'Usuário'}</Text>
+            <Text style={styles.dateText}>{dataAtual}</Text>
+          </View>
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatarText}>{firstLetter}</Text>
+          </View>
+        </View>
 
       <View style={styles.cardsGrid}>
         {dashboardCards.map(card => renderCard(card.title, card.value, card.icon, card.color))}
@@ -92,6 +109,7 @@ export default function Home() {
       <Text style={[styles.sectionTitle, { marginTop: SPACING.lg, marginBottom: SPACING.sm }]}>Produtos Recentes</Text>
     </View>
   );
+};
 
   const renderItem = ({ item }: { item: Produto }) => (
     <View style={styles.produtoItem}>
@@ -133,8 +151,15 @@ const styles = StyleSheet.create({
   headerContainer: {
     marginBottom: SPACING.md,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.md,
+  },
   greetingContainer: {
-    marginBottom: SPACING.lg,
+    flex: 1,
+    paddingRight: SPACING.sm,
   },
   greetingText: {
     fontSize: FONT_SIZE.xl,
@@ -146,6 +171,20 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: SPACING.xs,
     textTransform: 'capitalize',
+  },
+  avatarContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...SHADOWS.sm,
+  },
+  avatarText: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: 'bold',
+    color: COLORS.white,
   },
   cardsGrid: {
     flexDirection: 'row',
