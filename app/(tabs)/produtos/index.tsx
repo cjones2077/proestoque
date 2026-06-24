@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+// app/(tabs)/produtos/index.tsx
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,33 +9,47 @@ import {
   TouchableOpacity,
   ScrollView,
   SafeAreaView,
-  Image,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useProducts } from '../../../src/contexts/ProductsContext';
-import { Produto, CATEGORIAS } from '../../../src/schemas/produtoSchema';
+import { useCategorias } from '../../../src/hooks/useCategorias';
+import { Produto } from '../../../src/schemas/produtoSchema';
+import LoadingView from '../../../src/components/LoadingView';
+import ErrorView from '../../../src/components/ErrorView';
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '../../../src/constants/theme';
 
 export default function ProdutosScreen() {
-  const { produtos } = useProducts();
+  const { produtos, isLoading, error, loadProducts } = useProducts();
+  const { categorias } = useCategorias();
   const router = useRouter();
+
   const [searchText, setSearchText] = useState('');
-  const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null);
+  const [selectedCategoriaId, setSelectedCategoriaId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Filtrar produtos com base no texto E na categoria
+  // Pull-to-refresh — sincroniza com a API
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadProducts();
+    setRefreshing(false);
+  }, [loadProducts]);
+
+  // Filtra por texto e categoria selecionada
   const produtosFiltrados = useMemo(() => {
-    return produtos.filter(produto => {
-      const matchText = produto.nome.toLowerCase().includes(searchText.toLowerCase()) ||
-                        produto.categoria.toLowerCase().includes(searchText.toLowerCase());
-
-      const matchCategoria = selectedCategoria ? produto.categoria === selectedCategoria : true;
-
+    return produtos.filter((produto) => {
+      const matchText =
+        produto.nome.toLowerCase().includes(searchText.toLowerCase()) ||
+        produto.categoriaNome.toLowerCase().includes(searchText.toLowerCase());
+      const matchCategoria = selectedCategoriaId
+        ? produto.categoriaId === selectedCategoriaId
+        : true;
       return matchText && matchCategoria;
     });
-  }, [produtos, searchText, selectedCategoria]);
+  }, [produtos, searchText, selectedCategoriaId]);
 
-  const getStatusColor = (status: 'Normal' | 'Baixo' | 'Sem estoque') => {
+  const getStatusColor = (status: Produto['status']) => {
     switch (status) {
       case 'Normal': return COLORS.success;
       case 'Baixo': return COLORS.warning;
@@ -43,10 +58,19 @@ export default function ProdutosScreen() {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
+  // ─── Estados de rede ───────────────────────────────────────────────
+  if (isLoading && !refreshing) {
+    return <LoadingView message="Buscando produtos..." />;
+  }
+
+  if (error && !refreshing) {
+    return <ErrorView message={error} onRetry={loadProducts} />;
+  }
+
+  // ─── Renderização da lista ─────────────────────────────────────────
   const renderItem = ({ item }: { item: Produto }) => (
     <TouchableOpacity
       style={styles.produtoItem}
@@ -54,23 +78,23 @@ export default function ProdutosScreen() {
       activeOpacity={0.7}
     >
       <View style={styles.produtoImageWrapper}>
-        {item.foto ? (
-          <Image source={{ uri: item.foto }} style={styles.produtoFoto} />
-        ) : (
-          <View style={styles.fallbackIconBox}>
-            <Ionicons name="cube-outline" size={24} color={COLORS.primary} />
-          </View>
-        )}
+        <View style={styles.fallbackIconBox}>
+          <Ionicons name="cube-outline" size={24} color={COLORS.primary} />
+        </View>
       </View>
 
       <View style={styles.produtoInfo}>
         <Text style={styles.produtoNome} numberOfLines={1}>{item.nome}</Text>
-        <Text style={styles.produtoCategoria}>{item.categoria}</Text>
-        <Text style={styles.produtoPreco}>{formatCurrency(item.preco)} - Qtd: {item.quantidade}</Text>
+        <Text style={styles.produtoCategoria}>{item.categoriaNome}</Text>
+        <Text style={styles.produtoPreco}>
+          {formatCurrency(item.preco)} · {item.quantidade} {item.unidade}
+        </Text>
       </View>
 
       <View style={[styles.badge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-        <Text style={[styles.badgeText, { color: getStatusColor(item.status) }]}>{item.status}</Text>
+        <Text style={[styles.badgeText, { color: getStatusColor(item.status) }]}>
+          {item.status}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -79,12 +103,15 @@ export default function ProdutosScreen() {
     <View style={styles.emptyContainer}>
       <Ionicons name="search-outline" size={48} color={COLORS.placeholder} />
       <Text style={styles.emptyText}>Nenhum produto encontrado.</Text>
-      <Text style={styles.emptySubtext}>Tente ajustar sua busca ou toque no botão &apos;+&apos; para adicionar.</Text>
+      <Text style={styles.emptySubtext}>
+        Tente ajustar sua busca ou toque no botão '+' para adicionar.
+      </Text>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Cabeçalho com busca e filtros de categoria */}
       <View style={styles.header}>
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={COLORS.placeholder} style={styles.searchIcon} />
@@ -104,34 +131,38 @@ export default function ProdutosScreen() {
           )}
         </View>
 
+        {/* Chips de categoria — vindos da API */}
         <View style={styles.chipsContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsScroll}
+          >
             <TouchableOpacity
-              style={[
-                styles.chip,
-                selectedCategoria === null && styles.chipActive
-              ]}
-              onPress={() => setSelectedCategoria(null)}
+              style={[styles.chip, selectedCategoriaId === null && styles.chipActive]}
+              onPress={() => setSelectedCategoriaId(null)}
             >
-              <Text style={[
-                styles.chipText,
-                selectedCategoria === null && styles.chipTextActive
-              ]}>Todas</Text>
+              <Text style={[styles.chipText, selectedCategoriaId === null && styles.chipTextActive]}>
+                Todas
+              </Text>
             </TouchableOpacity>
 
-            {CATEGORIAS.map(categoria => (
+            {categorias.map((cat) => (
               <TouchableOpacity
-                key={categoria}
-                style={[
-                  styles.chip,
-                  selectedCategoria === categoria && styles.chipActive
-                ]}
-                onPress={() => setSelectedCategoria(categoria === selectedCategoria ? null : categoria)}
+                key={cat.id}
+                style={[styles.chip, selectedCategoriaId === cat.id && styles.chipActive]}
+                onPress={() =>
+                  setSelectedCategoriaId(cat.id === selectedCategoriaId ? null : cat.id)
+                }
               >
-                <Text style={[
-                  styles.chipText,
-                  selectedCategoria === categoria && styles.chipTextActive
-                ]}>{categoria}</Text>
+                <Text
+                  style={[
+                    styles.chipText,
+                    selectedCategoriaId === cat.id && styles.chipTextActive,
+                  ]}
+                >
+                  {cat.nome}
+                </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -145,9 +176,17 @@ export default function ProdutosScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={renderEmptyComponent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
       />
 
-      {/* Floating Action Button */}
+      {/* FAB — Adicionar Produto */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => router.push('/produtos/novo')}
@@ -220,7 +259,7 @@ const styles = StyleSheet.create({
   listContent: {
     padding: SPACING.md,
     flexGrow: 1,
-    paddingBottom: 90, // Espaço extra para o FAB
+    paddingBottom: 90,
   },
   produtoItem: {
     flexDirection: 'row',
@@ -234,11 +273,6 @@ const styles = StyleSheet.create({
   },
   produtoImageWrapper: {
     marginRight: SPACING.md,
-  },
-  produtoFoto: {
-    width: 48,
-    height: 48,
-    borderRadius: BORDER_RADIUS.md,
   },
   fallbackIconBox: {
     width: 48,

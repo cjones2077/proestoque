@@ -1,8 +1,18 @@
+// src/components/ProdutoForm.tsx
 import React from 'react';
-import { View, StyleSheet, Text, ScrollView, TouchableOpacity } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { produtoSchema, ProdutoFormData, CATEGORIAS } from '../schemas/produtoSchema';
+import { produtoSchema, ProdutoFormData, UNIDADES } from '../schemas/produtoSchema';
+import { useCategorias } from '../hooks/useCategorias';
 import Input from './Input';
 import Button from './Button';
 import ImagePickerField from './ImagePickerField';
@@ -15,7 +25,14 @@ interface ProdutoFormProps {
   onDelete?: () => void;
 }
 
-export default function ProdutoForm({ initialValues, onSubmit, buttonTitle, onDelete }: ProdutoFormProps) {
+export default function ProdutoForm({
+  initialValues,
+  onSubmit,
+  buttonTitle,
+  onDelete,
+}: ProdutoFormProps) {
+  const { categorias, isLoading: loadingCats, error: errorCats, refetch: refetchCats } = useCategorias();
+
   const {
     control,
     handleSubmit,
@@ -23,27 +40,21 @@ export default function ProdutoForm({ initialValues, onSubmit, buttonTitle, onDe
   } = useForm<ProdutoFormData>({
     resolver: zodResolver(produtoSchema),
     defaultValues: {
-      nome: initialValues?.nome || '',
-      quantidade: initialValues?.quantidade !== undefined ? initialValues.quantidade : 0,
-      quantidadeMinima: initialValues?.quantidadeMinima !== undefined ? initialValues.quantidadeMinima : 0,
-      preco: initialValues?.preco !== undefined ? initialValues.preco : 0,
-      categoria: initialValues?.categoria || undefined,
-      observacao: initialValues?.observacao || '',
-      foto: initialValues?.foto || '',
+      nome: initialValues?.nome ?? '',
+      quantidade: initialValues?.quantidade ?? 0,
+      quantidadeMinima: initialValues?.quantidadeMinima ?? 0,
+      preco: initialValues?.preco ?? 0,
+      categoriaId: initialValues?.categoriaId ?? '',
+      unidade: initialValues?.unidade ?? 'un',
+      observacao: initialValues?.observacao ?? '',
     },
   });
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-      {/* Foto do Produto */}
-      <Controller
-        control={control}
-        name="foto"
-        render={({ field: { value, onChange } }) => (
-          <ImagePickerField value={value} onChange={onChange} />
-        )}
-      />
-
+    <ScrollView
+      contentContainerStyle={styles.scrollContainer}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Nome do Produto */}
       <Controller
         control={control}
@@ -60,45 +71,63 @@ export default function ProdutoForm({ initialValues, onSubmit, buttonTitle, onDe
         )}
       />
 
-      {/* Categoria */}
+      {/* Categoria — dados da API */}
       <View style={styles.fieldWrapper}>
         <Text style={styles.fieldLabel}>Categoria</Text>
-        <Controller
-          control={control}
-          name="categoria"
-          render={({ field: { value, onChange } }) => (
-            <View>
-              <View style={styles.categoriesGrid}>
-                {CATEGORIAS.map((cat) => {
-                  const isSelected = value === cat;
-                  return (
-                    <TouchableOpacity
-                      key={cat}
-                      style={[
-                        styles.categoryChip,
-                        isSelected && styles.categoryChipActive,
-                      ]}
-                      onPress={() => onChange(cat)}
-                      activeOpacity={0.7}
-                    >
-                      <Text
+        {loadingCats ? (
+          <ActivityIndicator color={COLORS.primary} style={{ marginVertical: SPACING.sm }} />
+        ) : errorCats ? (
+          <View style={styles.catErrorBox}>
+            <Text style={styles.catErrorText}>Não foi possível carregar as categorias.</Text>
+            <TouchableOpacity onPress={refetchCats} style={styles.catRetryBtn}>
+              <Text style={styles.catRetryText}>Tentar novamente</Text>
+            </TouchableOpacity>
+          </View>
+        ) : categorias.length === 0 ? (
+          <View style={styles.catErrorBox}>
+            <Text style={styles.catErrorText}>Nenhuma categoria encontrada no servidor.</Text>
+            <TouchableOpacity onPress={refetchCats} style={styles.catRetryBtn}>
+              <Text style={styles.catRetryText}>Recarregar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Controller
+            control={control}
+            name="categoriaId"
+            render={({ field: { value, onChange } }) => (
+              <View>
+                <View style={styles.categoriesGrid}>
+                  {categorias.map((cat) => {
+                    const isSelected = value === cat.id;
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
                         style={[
-                          styles.categoryChipText,
-                          isSelected && styles.categoryChipTextActive,
+                          styles.categoryChip,
+                          isSelected && styles.categoryChipActive,
                         ]}
+                        onPress={() => onChange(cat.id)}
+                        activeOpacity={0.7}
                       >
-                        {cat}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Text
+                          style={[
+                            styles.categoryChipText,
+                            isSelected && styles.categoryChipTextActive,
+                          ]}
+                        >
+                          {cat.nome}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {errors.categoriaId?.message && (
+                  <Text style={styles.errorText}>{errors.categoriaId.message}</Text>
+                )}
               </View>
-              {errors.categoria?.message && (
-                <Text style={styles.errorText}>{errors.categoria.message}</Text>
-              )}
-            </View>
-          )}
-        />
+            )}
+          />
+        )}
       </View>
 
       {/* Quantidades em Estoque e Mínima */}
@@ -140,7 +169,7 @@ export default function ProdutoForm({ initialValues, onSubmit, buttonTitle, onDe
         </View>
       </View>
 
-      {/* Preço Unitário */}
+      {/* Preço */}
       <Controller
         control={control}
         name="preco"
@@ -156,6 +185,47 @@ export default function ProdutoForm({ initialValues, onSubmit, buttonTitle, onDe
           />
         )}
       />
+
+      {/* Unidade */}
+      <View style={styles.fieldWrapper}>
+        <Text style={styles.fieldLabel}>Unidade de Medida</Text>
+        <Controller
+          control={control}
+          name="unidade"
+          render={({ field: { value, onChange } }) => (
+            <View>
+              <View style={styles.categoriesGrid}>
+                {UNIDADES.map((unidade) => {
+                  const isSelected = value === unidade;
+                  return (
+                    <TouchableOpacity
+                      key={unidade}
+                      style={[
+                        styles.categoryChip,
+                        isSelected && styles.categoryChipActive,
+                      ]}
+                      onPress={() => onChange(unidade)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryChipText,
+                          isSelected && styles.categoryChipTextActive,
+                        ]}
+                      >
+                        {unidade}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {errors.unidade?.message && (
+                <Text style={styles.errorText}>{errors.unidade.message}</Text>
+              )}
+            </View>
+          )}
+        />
+      </View>
 
       {/* Observações */}
       <Controller
@@ -187,7 +257,11 @@ export default function ProdutoForm({ initialValues, onSubmit, buttonTitle, onDe
 
       {/* Botão de Excluir */}
       {onDelete && (
-        <TouchableOpacity style={styles.deleteButton} onPress={onDelete} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={onDelete}
+          activeOpacity={0.7}
+        >
           <Text style={styles.deleteButtonText}>Excluir Produto</Text>
         </TouchableOpacity>
       )}
@@ -199,6 +273,29 @@ const styles = StyleSheet.create({
   scrollContainer: {
     padding: SPACING.md,
     paddingBottom: SPACING.xxl,
+  },
+  catErrorBox: {
+    backgroundColor: COLORS.errorLight,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  catErrorText: {
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.error,
+    textAlign: 'center',
+  },
+  catRetryBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs + 2,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  catRetryText: {
+    color: COLORS.white,
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
   },
   fieldWrapper: {
     marginBottom: SPACING.md,

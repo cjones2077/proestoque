@@ -1,11 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/api';
+import { getErrorMessage, getFieldErrors } from '../utils/getErrorMessage';
 
 export interface User {
   id: string;
   nome: string;
   email: string;
+}
+
+export interface AuthError {
+  message: string;
+  fieldErrors: Record<string, string>;
 }
 
 export interface AuthContextType {
@@ -80,7 +86,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(usuario);
     } catch (error) {
       console.error('Erro ao fazer login:', error);
-      throw error;
+      const authError: AuthError = {
+        message: getErrorMessage(error),
+        fieldErrors: getFieldErrors(error),
+      };
+      throw authError;
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +112,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(usuario);
     } catch (error) {
       console.error('Erro ao registrar:', error);
-      throw error;
+      const authError: AuthError = {
+        message: getErrorMessage(error),
+        fieldErrors: getFieldErrors(error),
+      };
+      throw authError;
     } finally {
       setIsLoading(false);
     }

@@ -1,16 +1,18 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 
-// Para emuladores Android, usa-se 10.0.2.2 ao invés de localhost
-// Se estiver usando dispositivo físico, coloque o IP da sua máquina
-const baseURL = Platform.OS === 'android' ? 'http://10.0.2.2:3333/api' : 'http://localhost:3333/api';
+// EXPO_PUBLIC_* é exposto automaticamente pelo Expo sem necessitar de plugins extras.
+// Para emulador Android use: http://10.0.2.2:3333/api
+// Para dispositivo físico use: http://<IP_DA_SUA_MAQUINA>:3333/api
+const baseURL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3333/api';
 
 export const api = axios.create({
   baseURL,
+  timeout: 10000,
 });
 
-// Request Interceptor: adiciona o token JWT nas requisições
+// ─── Request Interceptor ────────────────────────────────────────────
+// Injeta o token JWT em cada requisição autenticada
 api.interceptors.request.use(
   async (config) => {
     try {
@@ -26,19 +28,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response Interceptor: trata erros 401 para deslogar
+// ─── Response Interceptor ───────────────────────────────────────────
+// Limpa o storage caso a API retorne 401 (token expirado/inválido)
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response && error.response.status === 401) {
-      console.warn('Não autorizado (401). Limpando token e refazendo login.');
-      // O contexto de auth irá checar a validade e deslogar se necessário,
-      // mas também podemos forçar a limpeza dos dados aqui.
-      await AsyncStorage.removeItem('@proestoque:token');
-      await AsyncStorage.removeItem('@proestoque:user');
-      
-      // Para o app reiniciar a navegação, você pode emitir um evento ou deixar o AuthContext agir
-      // Se usar EventEmitter ou similar, seria emitido aqui
+    if (error.response?.status === 401) {
+      console.warn('Token inválido (401). Limpando credenciais salvas.');
+      await AsyncStorage.multiRemove(['@proestoque:token', '@proestoque:user']);
     }
     return Promise.reject(error);
   }

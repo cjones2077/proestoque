@@ -8,16 +8,16 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import LogoProEstoque from '../../src/components/LogoProEstoque';
 import Input from '../../src/components/Input';
 import Button from '../../src/components/Button';
-import { COLORS, FONT_SIZE, SPACING } from '../../src/constants/theme';
+import { COLORS, FONT_SIZE, SPACING, BORDER_RADIUS } from '../../src/constants/theme';
 
-import { useAuth } from '../../src/contexts/AuthContext';
+import { useAuth, AuthError } from '../../src/contexts/AuthContext';
 
 export default function CadastroScreen() {
   const [nome, setNome] = useState('');
@@ -25,31 +25,44 @@ export default function CadastroScreen() {
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [loading, setLoading] = useState(false);
-  const [senhaError, setSenhaError] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   
   const { registrar } = useAuth();
 
+  function clearErrors() {
+    if (errorMessage) setErrorMessage('');
+    if (Object.keys(fieldErrors).length > 0) setFieldErrors({});
+  }
+
+  function setFieldError(campo: string, mensagem: string) {
+    setFieldErrors((prev) => ({ ...prev, [campo]: mensagem }));
+  }
+
   async function handleCadastro() {
+    clearErrors();
+
     if (senha !== confirmarSenha) {
-      setSenhaError('As senhas não coincidem');
+      setFieldError('confirmarSenha', 'As senhas não coincidem');
       return;
     }
     
     if (!nome.trim() || !email.trim() || !senha.trim()) {
-      Alert.alert('Aviso', 'Preencha todos os campos obrigatórios.');
+      setErrorMessage('Preencha todos os campos obrigatórios.');
       return;
     }
 
-    setSenhaError('');
     setLoading(true);
 
     try {
       await registrar(nome, email, senha);
       // NavigationGuard no _layout cuidará do redirecionamento
     } catch (error: any) {
-      console.error('Erro de cadastro:', error);
-      const mensagem = error.response?.data?.message || 'Falha ao criar conta. Tente novamente.';
-      Alert.alert('Erro', mensagem);
+      const authError = error as AuthError;
+      setErrorMessage(authError.message || 'Falha ao criar conta. Tente novamente.');
+      if (authError.fieldErrors) {
+        setFieldErrors(authError.fieldErrors);
+      }
     } finally {
       setLoading(false);
     }
@@ -78,13 +91,25 @@ export default function CadastroScreen() {
               Preencha os dados abaixo para começar
             </Text>
 
+            {/* Banner de erro */}
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={20} color={COLORS.error} />
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
             <Input
               label="Nome"
               icon="person-outline"
               placeholder="Seu nome completo"
               autoCapitalize="words"
               value={nome}
-              onChangeText={setNome}
+              onChangeText={(text) => {
+                setNome(text);
+                clearErrors();
+              }}
+              error={fieldErrors['nome']}
             />
 
             <Input
@@ -94,7 +119,11 @@ export default function CadastroScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                clearErrors();
+              }}
+              error={fieldErrors['email']}
             />
 
             <Input
@@ -105,8 +134,9 @@ export default function CadastroScreen() {
               value={senha}
               onChangeText={(text) => {
                 setSenha(text);
-                if (senhaError) setSenhaError('');
+                clearErrors();
               }}
+              error={fieldErrors['senha']}
             />
 
             <Input
@@ -117,9 +147,9 @@ export default function CadastroScreen() {
               value={confirmarSenha}
               onChangeText={(text) => {
                 setConfirmarSenha(text);
-                if (senhaError) setSenhaError('');
+                clearErrors();
               }}
-              error={senhaError}
+              error={fieldErrors['confirmarSenha']}
             />
 
             <Button
@@ -174,6 +204,25 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
     marginBottom: SPACING.lg,
+    lineHeight: 20,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.errorLight,
+    borderWidth: 1,
+    borderColor: COLORS.error,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 4,
+    marginBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.error,
+    fontWeight: '500',
     lineHeight: 20,
   },
   footer: {

@@ -8,34 +8,46 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import LogoProEstoque from '../../src/components/LogoProEstoque';
 import Input from '../../src/components/Input';
 import Button from '../../src/components/Button';
-import { COLORS, FONT_SIZE, SPACING } from '../../src/constants/theme';
+import { COLORS, FONT_SIZE, SPACING, BORDER_RADIUS } from '../../src/constants/theme';
 
-import { useAuth } from '../../src/contexts/AuthContext';
+import { useAuth, AuthError } from '../../src/contexts/AuthContext';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { login, isLoading } = useAuth();
 
+  function clearErrors() {
+    if (errorMessage) setErrorMessage('');
+    if (Object.keys(fieldErrors).length > 0) setFieldErrors({});
+  }
+
   async function handleLogin() {
+    clearErrors();
+
     if (!email.trim() || !senha.trim()) {
-      Alert.alert('Aviso', 'Por favor, preencha o e-mail e a senha.');
+      setErrorMessage('Por favor, preencha o e-mail e a senha.');
       return;
     }
 
     try {
       await login(email, senha);
     } catch (error: any) {
-      console.error('Erro de login:', error);
-      const mensagem = error.response?.data?.message || 'Falha ao realizar login. Tente novamente.';
-      Alert.alert('Erro', mensagem);
+      const authError = error as AuthError;
+      setErrorMessage(authError.message || 'Falha ao realizar login. Tente novamente.');
+      if (authError.fieldErrors) {
+        setFieldErrors(authError.fieldErrors);
+      }
     }
   }
 
@@ -62,6 +74,14 @@ export default function LoginScreen() {
               Acesse sua conta para gerenciar seu estoque
             </Text>
 
+            {/* Banner de erro */}
+            {errorMessage ? (
+              <View style={styles.errorBanner}>
+                <Ionicons name="alert-circle" size={20} color={COLORS.error} />
+                <Text style={styles.errorBannerText}>{errorMessage}</Text>
+              </View>
+            ) : null}
+
             <Input
               label="E-mail"
               icon="mail-outline"
@@ -69,7 +89,11 @@ export default function LoginScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                clearErrors();
+              }}
+              error={fieldErrors['email']}
             />
 
             <Input
@@ -78,7 +102,11 @@ export default function LoginScreen() {
               placeholder="Sua senha"
               isPassword
               value={senha}
-              onChangeText={setSenha}
+              onChangeText={(text) => {
+                setSenha(text);
+                clearErrors();
+              }}
+              error={fieldErrors['senha']}
             />
 
             <TouchableOpacity
@@ -139,6 +167,25 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     color: COLORS.textSecondary,
     marginBottom: SPACING.lg,
+    lineHeight: 20,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.errorLight,
+    borderWidth: 1,
+    borderColor: COLORS.error,
+    borderRadius: BORDER_RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 4,
+    marginBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: FONT_SIZE.sm,
+    color: COLORS.error,
+    fontWeight: '500',
     lineHeight: 20,
   },
   forgotBtn: {

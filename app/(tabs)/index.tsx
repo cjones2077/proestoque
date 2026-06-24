@@ -1,42 +1,54 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
+// app/(tabs)/index.tsx
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
   RefreshControl,
-  SafeAreaView
+  SafeAreaView,
 } from 'react-native';
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '../../src/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useProducts } from '../../src/contexts/ProductsContext';
 import { Produto } from '../../src/schemas/produtoSchema';
+import LoadingView from '../../src/components/LoadingView';
 
 export default function Home() {
   const { user } = useAuth();
-  const { produtos } = useProducts();
+  const { produtos, isLoading, loadProducts } = useProducts();
   const [refreshing, setRefreshing] = useState(false);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Simula uma requisição de rede
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1500);
-  };
+    await loadProducts();
+    setRefreshing(false);
+  }, [loadProducts]);
 
-  // Cálculos para o Dashboard
+  if (isLoading && !refreshing) {
+    return <LoadingView message="Carregando dashboard..." />;
+  }
+
+  // ─── Cálculos derivados da lista real de produtos ─────────────────
   const totalProdutos = produtos.length;
-  const totalAlertas = produtos.filter(p => p.quantidade <= p.quantidadeMinima).length;
-  const categoriasUnicas = new Set(produtos.map(p => p.categoria)).size;
-  const valorTotal = produtos.reduce((acc, curr) => acc + (curr.preco * curr.quantidade), 0);
+  const totalAlertas = produtos.filter(
+    (p) => p.status === 'Baixo' || p.status === 'Sem estoque'
+  ).length;
+  const categoriasUnicas = new Set(produtos.map((p) => p.categoriaId)).size;
+  const valorTotal = produtos.reduce(
+    (acc, curr) => acc + curr.preco * curr.quantidade,
+    0
+  );
+  const produtosCriticos = produtos.filter(
+    (p) => p.status === 'Sem estoque' || p.status === 'Baixo'
+  );
 
-  const dataAtual = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(new Date());
+  const dataAtual = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(
+    new Date()
+  );
 
-  const produtosCriticos = produtos.filter(p => p.status === 'Sem estoque' || p.status === 'Baixo');
-
-  const getStatusColor = (status: 'Normal' | 'Baixo' | 'Sem estoque') => {
+  const getStatusColor = (status: Produto['status']) => {
     switch (status) {
       case 'Normal': return COLORS.success;
       case 'Baixo': return COLORS.warning;
@@ -45,11 +57,29 @@ export default function Home() {
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
   };
 
-  const renderCard = (title: string, value: string | number, icon: keyof typeof Ionicons.glyphMap, color: string) => (
+  const dashboardCards = [
+    { title: 'Total de Produtos', value: totalProdutos, icon: 'cube-outline' as const, color: COLORS.primary },
+    { title: 'Alertas', value: totalAlertas, icon: 'warning-outline' as const, color: COLORS.warning },
+    { title: 'Categorias', value: categoriasUnicas, icon: 'grid-outline' as const, color: COLORS.info },
+    { title: 'Valor Total', value: formatCurrency(valorTotal), icon: 'cash-outline' as const, color: COLORS.success },
+  ];
+
+  const renderCard = (
+    title: string,
+    value: string | number,
+    icon: keyof typeof Ionicons.glyphMap,
+    color: string
+  ) => (
     <View style={styles.card} key={title}>
       <View style={[styles.cardIconBox, { backgroundColor: color + '20' }]}>
         <Ionicons name={icon} size={24} color={color} />
@@ -61,28 +91,16 @@ export default function Home() {
     </View>
   );
 
-  const dashboardCards = [
-    { title: 'Total de Produtos', value: totalProdutos, icon: 'cube-outline', color: COLORS.primary },
-    { title: 'Alertas', value: totalAlertas, icon: 'warning-outline', color: COLORS.warning },
-    { title: 'Categorias', value: categoriasUnicas, icon: 'grid-outline', color: COLORS.info },
-    { title: 'Valor Total', value: formatCurrency(valorTotal), icon: 'cash-outline', color: COLORS.success },
-  ] as const;
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Bom dia';
-    if (hour < 18) return 'Boa tarde';
-    return 'Boa noite';
-  };
-
   const renderHeader = () => {
     const firstLetter = user?.nome ? user.nome.charAt(0).toUpperCase() : 'U';
-
     return (
       <View style={styles.headerContainer}>
+        {/* Saudação */}
         <View style={styles.headerRow}>
           <View style={styles.greetingContainer}>
-            <Text style={styles.greetingText}>{getGreeting()}, {user?.nome || 'Usuário'}</Text>
+            <Text style={styles.greetingText}>
+              {getGreeting()}, {user?.nome || 'Usuário'}
+            </Text>
             <Text style={styles.dateText}>{dataAtual}</Text>
           </View>
           <View style={styles.avatarContainer}>
@@ -90,38 +108,53 @@ export default function Home() {
           </View>
         </View>
 
-      <View style={styles.cardsGrid}>
-        {dashboardCards.map(card => renderCard(card.title, card.value, card.icon, card.color))}
-      </View>
-
-      {produtosCriticos.length > 0 && (
-        <View style={styles.alertSection}>
-          <Text style={styles.sectionTitle}>Alertas de Estoque Crítico</Text>
-          {produtosCriticos.map(produto => (
-            <View key={produto.id} style={styles.alertItem}>
-              <Ionicons name="warning" size={20} color={COLORS.warning} />
-              <Text style={styles.alertItemText}>
-                {produto.nome} - <Text style={{ color: getStatusColor(produto.status), fontWeight: '600' }}>{produto.status}</Text>
-              </Text>
-            </View>
-          ))}
+        {/* Cards de métricas */}
+        <View style={styles.cardsGrid}>
+          {dashboardCards.map((card) =>
+            renderCard(card.title, card.value, card.icon, card.color)
+          )}
         </View>
-      )}
 
-      <Text style={[styles.sectionTitle, { marginTop: SPACING.lg, marginBottom: SPACING.sm }]}>Produtos Recentes</Text>
-    </View>
-  );
-};
+        {/* Alertas críticos */}
+        {produtosCriticos.length > 0 && (
+          <View style={styles.alertSection}>
+            <Text style={styles.sectionTitle}>Alertas de Estoque Crítico</Text>
+            {produtosCriticos.map((produto) => (
+              <View key={produto.id} style={styles.alertItem}>
+                <Ionicons name="warning" size={20} color={COLORS.warning} />
+                <Text style={styles.alertItemText}>
+                  {produto.nome} —{' '}
+                  <Text
+                    style={{ color: getStatusColor(produto.status), fontWeight: '600' }}
+                  >
+                    {produto.status}
+                  </Text>
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <Text style={[styles.sectionTitle, { marginTop: SPACING.lg, marginBottom: SPACING.sm }]}>
+          Produtos Recentes
+        </Text>
+      </View>
+    );
+  };
 
   const renderItem = ({ item }: { item: Produto }) => (
     <View style={styles.produtoItem}>
       <View style={styles.produtoInfo}>
         <Text style={styles.produtoNome}>{item.nome}</Text>
-        <Text style={styles.produtoCategoria}>{item.categoria}</Text>
-        <Text style={styles.produtoPreco}>{formatCurrency(item.preco)} - Qtd: {item.quantidade}</Text>
+        <Text style={styles.produtoCategoria}>{item.categoriaNome}</Text>
+        <Text style={styles.produtoPreco}>
+          {formatCurrency(item.preco)} · Qtd: {item.quantidade} {item.unidade}
+        </Text>
       </View>
       <View style={[styles.badge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-        <Text style={[styles.badgeText, { color: getStatusColor(item.status) }]}>{item.status}</Text>
+        <Text style={[styles.badgeText, { color: getStatusColor(item.status) }]}>
+          {item.status}
+        </Text>
       </View>
     </View>
   );
@@ -129,13 +162,19 @@ export default function Home() {
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
-        data={produtos.slice(0, 5)} // Mostra apenas os 5 primeiros como recentes
+        data={produtos.slice(0, 5)} // Os 5 mais recentes
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
         contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
         }
       />
     </SafeAreaView>

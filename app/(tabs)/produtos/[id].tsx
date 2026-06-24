@@ -1,24 +1,31 @@
+// app/(tabs)/produtos/[id].tsx
 import React from 'react';
-import { SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
+import { SafeAreaView, StyleSheet, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useProducts } from '../../../src/contexts/ProductsContext';
 import ProdutoForm from '../../../src/components/ProdutoForm';
-import { COLORS, FONT_SIZE, SPACING } from '../../../src/constants/theme';
+import LoadingView from '../../../src/components/LoadingView';
+import ErrorView from '../../../src/components/ErrorView';
+import { COLORS } from '../../../src/constants/theme';
 import { ProdutoFormData } from '../../../src/schemas/produtoSchema';
 
 export default function EditarProdutoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { produtos, atualizarProduto, excluirProduto } = useProducts();
+  const { produtos, isLoading, atualizarProduto, excluirProduto, loadProducts } = useProducts();
   const router = useRouter();
 
-  // Encontra o produto pelo ID
+  if (isLoading) {
+    return <LoadingView message="Carregando produto..." />;
+  }
+
   const produto = produtos.find((p) => p.id === id);
 
   if (!produto) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Produto não encontrado.</Text>
-      </View>
+      <ErrorView
+        message="Produto não encontrado. Ele pode ter sido excluído."
+        onRetry={loadProducts}
+      />
     );
   }
 
@@ -26,21 +33,17 @@ export default function EditarProdutoScreen() {
     try {
       await atualizarProduto(produto.id, data);
       router.back();
-    } catch (error) {
-      console.error('Erro ao atualizar produto:', error);
-      Alert.alert('Erro', 'Não foi possível atualizar o produto.');
+    } catch {
+      // Erro já tratado (Alert) dentro do contexto
     }
   };
 
   const handleDelete = () => {
     Alert.alert(
       'Excluir Produto',
-      `Tem certeza de que deseja excluir o produto "${produto.nome}"? Esta ação não pode ser desfeita.`,
+      `Tem certeza de que deseja excluir "${produto.nome}"? Esta ação não pode ser desfeita.`,
       [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
+        { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Excluir',
           style: 'destructive',
@@ -48,9 +51,8 @@ export default function EditarProdutoScreen() {
             try {
               await excluirProduto(produto.id);
               router.back();
-            } catch (error) {
-              console.error('Erro ao excluir produto:', error);
-              Alert.alert('Erro', 'Não foi possível excluir o produto.');
+            } catch {
+              // Erro já tratado no contexto
             }
           },
         },
@@ -59,10 +61,21 @@ export default function EditarProdutoScreen() {
     );
   };
 
+  // Mapeia o produto salvo nos valores iniciais do formulário
+  const initialValues: Partial<ProdutoFormData> = {
+    nome: produto.nome,
+    quantidade: produto.quantidade,
+    quantidadeMinima: produto.quantidadeMinima,
+    preco: produto.preco,
+    categoriaId: produto.categoriaId,
+    unidade: produto.unidade as any,
+    observacao: produto.observacao ?? '',
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ProdutoForm
-        initialValues={produto}
+        initialValues={initialValues}
         onSubmit={handleSubmit}
         buttonTitle="Salvar Alterações"
         onDelete={handleDelete}
@@ -75,17 +88,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.background,
-    padding: SPACING.lg,
-  },
-  errorText: {
-    fontSize: FONT_SIZE.lg,
-    color: COLORS.error,
-    fontWeight: '600',
   },
 });
