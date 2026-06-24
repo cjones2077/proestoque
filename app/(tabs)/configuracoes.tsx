@@ -7,6 +7,7 @@ import {
   Alert,
   SafeAreaView,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -16,24 +17,31 @@ export default function Configuracoes() {
   const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sair da Conta',
-      'Tem certeza de que deseja sair da sua conta?',
-      [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
+    if (Platform.OS === 'web') {
+      const confirmSair = window.confirm('Tem certeza de que deseja sair da sua conta?');
+      if (confirmSair) {
+        logout();
+      }
+    } else {
+      Alert.alert(
+        'Sair da Conta',
+        'Tem certeza de que deseja sair da sua conta?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
           },
-        },
-      ],
-      { cancelable: true }
-    );
+          {
+            text: 'Sair',
+            style: 'destructive',
+            onPress: async () => {
+              await logout();
+            },
+          },
+        ],
+        { cancelable: true }
+      );
+    }
   };
 
   const firstLetter = user?.nome ? user.nome.charAt(0).toUpperCase() : 'U';

@@ -17,6 +17,8 @@ import Input from '../../src/components/Input';
 import Button from '../../src/components/Button';
 import { COLORS, FONT_SIZE, SPACING } from '../../src/constants/theme';
 
+import { useAuth } from '../../src/contexts/AuthContext';
+
 export default function CadastroScreen() {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
@@ -24,22 +26,33 @@ export default function CadastroScreen() {
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [loading, setLoading] = useState(false);
   const [senhaError, setSenhaError] = useState('');
+  
+  const { registrar } = useAuth();
 
-  function handleCadastro() {
+  async function handleCadastro() {
     if (senha !== confirmarSenha) {
       setSenhaError('As senhas não coincidem');
+      return;
+    }
+    
+    if (!nome.trim() || !email.trim() || !senha.trim()) {
+      Alert.alert('Aviso', 'Preencha todos os campos obrigatórios.');
       return;
     }
 
     setSenhaError('');
     setLoading(true);
 
-    setTimeout(() => {
+    try {
+      await registrar(nome, email, senha);
+      // NavigationGuard no _layout cuidará do redirecionamento
+    } catch (error: any) {
+      console.error('Erro de cadastro:', error);
+      const mensagem = error.response?.data?.message || 'Falha ao criar conta. Tente novamente.';
+      Alert.alert('Erro', mensagem);
+    } finally {
       setLoading(false);
-      Alert.alert('Sucesso', 'Conta criada com sucesso!', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
-    }, 2000);
+    }
   }
 
   return (

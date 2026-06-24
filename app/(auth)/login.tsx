@@ -32,9 +32,10 @@ export default function LoginScreen() {
 
     try {
       await login(email, senha);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro de login:', error);
-      Alert.alert('Erro', 'Falha ao realizar login. Tente novamente.');
+      const mensagem = error.response?.data?.message || 'Falha ao realizar login. Tente novamente.';
+      Alert.alert('Erro', mensagem);
     }
   }
 

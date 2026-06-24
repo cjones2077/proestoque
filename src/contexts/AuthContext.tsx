@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../services/api';
 
 export interface User {
   id: string;
@@ -13,6 +14,7 @@ export interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, senha: string) => Promise<void>;
+  registrar: (nome: string, email: string, senha: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -27,14 +29,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     async function loadStorageData() {
       const startTime = Date.now();
       try {
-        const [storedToken, storedUser] = await Promise.all([
-          AsyncStorage.getItem('@proestoque:token'),
-          AsyncStorage.getItem('@proestoque:user'),
-        ]);
+        const storedToken = await AsyncStorage.getItem('@proestoque:token');
+        const storedUser = await AsyncStorage.getItem('@proestoque:user');
 
         if (storedToken && storedUser) {
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
+          // Valida o token com o backend
+          api.defaults.headers.Authorization = `Bearer ${storedToken}`;
+          try {
+            const response = await api.get('/auth/me');
+            if (response.data.usuario) {
+              setToken(storedToken);
+              setUser(response.data.usuario);
+            }
+          } catch (apiError) {
+            console.log('Token inválido ou expirado, limpando dados...', apiError);
+            await AsyncStorage.removeItem('@proestoque:token');
+            await AsyncStorage.removeItem('@proestoque:user');
+            setToken(null);
+            setUser(null);
+          }
         }
       } catch (error) {
         console.error('Erro ao carregar dados de autenticação:', error);
@@ -54,25 +67,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   async function login(email: string, senha: string) {
     setIsLoading(true);
     try {
-      // Simula uma chamada de API (aguarda 500ms)
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const mockUser: User = {
-        id: '1',
-        nome: 'João Silva',
-        email: email,
-      };
-      const mockToken = 'mock-jwt-token-12345';
+      const response = await api.post('/auth/login', { email, senha });
+      const { token: apiToken, usuario } = response.data;
 
       await Promise.all([
-        AsyncStorage.setItem('@proestoque:token', mockToken),
-        AsyncStorage.setItem('@proestoque:user', JSON.stringify(mockUser)),
+        AsyncStorage.setItem('@proestoque:token', apiToken),
+        AsyncStorage.setItem('@proestoque:user', JSON.stringify(usuario)),
       ]);
 
-      setToken(mockToken);
-      setUser(mockUser);
+      api.defaults.headers.Authorization = `Bearer ${apiToken}`;
+      setToken(apiToken);
+      setUser(usuario);
     } catch (error) {
       console.error('Erro ao fazer login:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function registrar(nome: string, email: string, senha: string) {
+    setIsLoading(true);
+    try {
+      const response = await api.post('/auth/registro', { nome, email, senha });
+      const { token: apiToken, usuario } = response.data;
+
+      await Promise.all([
+        AsyncStorage.setItem('@proestoque:token', apiToken),
+        AsyncStorage.setItem('@proestoque:user', JSON.stringify(usuario)),
+      ]);
+
+      api.defaults.headers.Authorization = `Bearer ${apiToken}`;
+      setToken(apiToken);
+      setUser(usuario);
+    } catch (error) {
+      console.error('Erro ao registrar:', error);
       throw error;
     } finally {
       setIsLoading(false);
@@ -88,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
       setToken(null);
       setUser(null);
+      delete api.defaults.headers.Authorization;
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
     } finally {
@@ -105,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         isAuthenticated,
         login,
+        registrar,
         logout,
       }}
     >
