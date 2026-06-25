@@ -1,17 +1,16 @@
-// src/contexts/ProductsContext.tsx
 import React, {
   createContext,
   useContext,
   useReducer,
   useEffect,
   useCallback,
+  useRef,
 } from 'react';
 import { Alert } from 'react-native';
 import { api } from '../services/api';
+import { sendStockAlert } from '../services/notifications';
 import { ProdutoAPI, ProdutoPayload } from '../types/api.types';
 import { Produto, ProdutoFormData } from '../schemas/produtoSchema';
-
-// ─── Helpers ────────────────────────────────────────────────────────
 
 function calcularStatus(
   quantidade: number,
@@ -22,7 +21,6 @@ function calcularStatus(
   return 'Normal';
 }
 
-/** Converte a resposta da API para o formato usado nas telas */
 function mapApiProduto(p: ProdutoAPI): Produto {
   return {
     id: p.id,
@@ -38,8 +36,6 @@ function mapApiProduto(p: ProdutoAPI): Produto {
   };
 }
 
-// ─── Tipos do Contexto ───────────────────────────────────────────────
-
 export interface ProductsContextType {
   produtos: Produto[];
   isLoading: boolean;
@@ -53,8 +49,6 @@ export interface ProductsContextType {
 const ProductsContext = createContext<ProductsContextType | undefined>(
   undefined
 );
-
-// ─── Reducer ────────────────────────────────────────────────────────
 
 type State = {
   produtos: Produto[];
@@ -86,7 +80,20 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-// ─── Provider ───────────────────────────────────────────────────────
+function verificarEstoqueCritico(
+  produtos: Produto[],
+  notificadosRef: React.MutableRefObject<Set<string>>
+) {
+  for (const p of produtos) {
+    if (
+      (p.status === 'Baixo' || p.status === 'Sem estoque') &&
+      !notificadosRef.current.has(p.id)
+    ) {
+      notificadosRef.current.add(p.id);
+      sendStockAlert(p.nome);
+    }
+  }
+}
 
 export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -97,25 +104,26 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
     error: null,
   });
 
-  // ── Carregar todos os produtos da API ──
+  const notificadosRef = useRef<Set<string>>(new Set());
+
   const loadProducts = useCallback(async () => {
     dispatch({ type: 'SET_LOADING' });
     try {
       const { data } = await api.get<ProdutoAPI[]>('/produtos');
-      dispatch({ type: 'LOAD_SUCCESS', payload: data.map(mapApiProduto) });
+      const mapped = data.map(mapApiProduto);
+      dispatch({ type: 'LOAD_SUCCESS', payload: mapped });
+      verificarEstoqueCritico(mapped, notificadosRef);
     } catch (err: any) {
-      const msg = 'Não foi possível carregar os produtos. Verifique sua conexão.';
+      const msg = 'Nao foi possivel carregar os produtos. Verifique sua conexao.';
       console.error('loadProducts error:', err?.response?.data ?? err.message);
       dispatch({ type: 'SET_ERROR', payload: msg });
     }
   }, []);
 
-  // Carrega ao montar
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
 
-  // ── Adicionar produto ──
   async function adicionarProduto(data: ProdutoFormData) {
     const payload: ProdutoPayload = {
       nome: data.nome,
@@ -128,7 +136,7 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
     };
     try {
       await api.post<ProdutoAPI>('/produtos', payload);
-      await loadProducts(); // Recarrega lista completa após criação
+      await loadProducts();
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ?? 'Erro ao adicionar o produto.';
@@ -137,7 +145,6 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
-  // ── Atualizar produto ──
   async function atualizarProduto(id: string, data: ProdutoFormData) {
     const payload: ProdutoPayload = {
       nome: data.nome,
@@ -150,7 +157,8 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
     };
     try {
       await api.put<ProdutoAPI>(`/produtos/${id}`, payload);
-      await loadProducts(); // Recarrega lista completa após atualização
+      notificadosRef.current.delete(id);
+      await loadProducts();
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ?? 'Erro ao atualizar o produto.';
@@ -159,14 +167,12 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }
 
-  // ── Excluir produto ──
   async function excluirProduto(id: string) {
-    // Optimistic update: remove da lista antes de confirmar com a API
     dispatch({ type: 'DELETE', payload: id });
     try {
       await api.delete(`/produtos/${id}`);
+      notificadosRef.current.delete(id);
     } catch (err: any) {
-      // Reverte: recarrega a lista caso a exclusão tenha falhado
       const msg = err?.response?.data?.message ?? 'Erro ao excluir o produto.';
       Alert.alert('Erro', msg);
       await loadProducts();
@@ -190,8 +196,6 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
     </ProductsContext.Provider>
   );
 };
-
-// ─── Hook ────────────────────────────────────────────────────────────
 
 export function useProducts() {
   const context = useContext(ProductsContext);

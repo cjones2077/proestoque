@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { useProducts } from '../../../src/contexts/ProductsContext';
 import { useCategorias } from '../../../src/hooks/useCategorias';
 import { Produto } from '../../../src/schemas/produtoSchema';
-import LoadingView from '../../../src/components/LoadingView';
+import { SkeletonProductList } from '../../../src/components/SkeletonProductCard';
 import ErrorView from '../../../src/components/ErrorView';
 import { COLORS, SPACING, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '../../../src/constants/theme';
 
@@ -61,9 +61,30 @@ export default function ProdutosScreen() {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  // ─── Estados de rede ───────────────────────────────────────────────
   if (isLoading && !refreshing) {
-    return <LoadingView message="Buscando produtos..." />;
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color={COLORS.placeholder} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar produtos..."
+              placeholderTextColor={COLORS.placeholder}
+              editable={false}
+            />
+          </View>
+          <View style={styles.chipsContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+              <View style={[styles.chip, styles.chipActive]}>
+                <Text style={[styles.chipText, styles.chipTextActive]}>Todas</Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+        <SkeletonProductList />
+      </SafeAreaView>
+    );
   }
 
   if (error && !refreshing) {

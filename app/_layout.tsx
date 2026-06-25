@@ -6,6 +6,7 @@ import * as NavigationBar from 'expo-navigation-bar';
 import SplashScreen from '../src/components/SplashScreen';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 import { ProductsProvider } from '../src/contexts/ProductsContext';
+import { setupNotificationHandler, registerForNotifications } from '../src/services/notifications';
 
 function NavigationGuard() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -41,8 +42,10 @@ function NavigationGuard() {
 
 export default function RootLayout() {
   useEffect(() => {
+    setupNotificationHandler();
+    registerForNotifications();
+
     if (Platform.OS === 'android') {
-      // Torna a barra de navegação do Android translúcida (edge-to-edge)
       NavigationBar.setPositionAsync('absolute');
       NavigationBar.setBackgroundColorAsync('transparent');
       NavigationBar.setButtonStyleAsync('dark');
