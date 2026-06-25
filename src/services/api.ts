@@ -4,11 +4,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // EXPO_PUBLIC_* é exposto automaticamente pelo Expo sem necessitar de plugins extras.
 // Para emulador Android use: http://10.0.2.2:3333/api
 // Para dispositivo físico use: http://<IP_DA_SUA_MAQUINA>:3333/api
-const baseURL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3333/api';
+// Em produção (APK), a URL do Railway é usada como fallback.
+const PRODUCTION_URL = 'https://proestoque-api-production-398d.up.railway.app/api';
+const baseURL = process.env.EXPO_PUBLIC_API_URL || PRODUCTION_URL;
+
+// Log para diagnóstico — verificar qual URL o app está usando
+console.log('[API] Base URL:', baseURL);
+console.log('[API] EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
 
 export const api = axios.create({
   baseURL,
-  timeout: 10000,
+  timeout: 15000,
 });
 
 // ─── Request Interceptor ────────────────────────────────────────────
