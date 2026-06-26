@@ -124,7 +124,12 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
     loadProducts();
   }, [loadProducts]);
 
+  const submittingRef = useRef(false);
+
   async function adicionarProduto(data: ProdutoFormData) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     const payload: ProdutoPayload = {
       nome: data.nome,
       quantidade: data.quantidade,
@@ -142,10 +147,15 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
         err?.response?.data?.message ?? 'Erro ao adicionar o produto.';
       Alert.alert('Erro', msg);
       throw err;
+    } finally {
+      submittingRef.current = false;
     }
   }
 
   async function atualizarProduto(id: string, data: ProdutoFormData) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     const payload: ProdutoPayload = {
       nome: data.nome,
       quantidade: data.quantidade,
@@ -164,6 +174,8 @@ export const ProductsProvider: React.FC<{ children: React.ReactNode }> = ({
         err?.response?.data?.message ?? 'Erro ao atualizar o produto.';
       Alert.alert('Erro', msg);
       throw err;
+    } finally {
+      submittingRef.current = false;
     }
   }
 

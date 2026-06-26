@@ -14,7 +14,7 @@ console.log('[API] EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
 
 export const api = axios.create({
   baseURL,
-  timeout: 15000,
+  timeout: 30000,
 });
 
 // ─── Request Interceptor ────────────────────────────────────────────
@@ -36,12 +36,20 @@ api.interceptors.request.use(
 
 // ─── Response Interceptor ───────────────────────────────────────────
 // Limpa o storage caso a API retorne 401 (token expirado/inválido)
+// NÃO limpa em rotas de login/registro (onde 401 é "credenciais erradas")
+const AUTH_PATHS = ['/auth/login', '/auth/registro'];
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      console.warn('Token inválido (401). Limpando credenciais salvas.');
-      await AsyncStorage.multiRemove(['@proestoque:token', '@proestoque:user']);
+      const requestUrl = error.config?.url || '';
+      const isAuthRoute = AUTH_PATHS.some((path) => requestUrl.includes(path));
+
+      if (!isAuthRoute) {
+        console.warn('Token inválido (401). Limpando credenciais salvas.');
+        await AsyncStorage.multiRemove(['@proestoque:token', '@proestoque:user']);
+      }
     }
     return Promise.reject(error);
   }
