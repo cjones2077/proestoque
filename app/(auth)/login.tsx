@@ -23,9 +23,10 @@ import { useAuth, AuthError } from '../../src/contexts/AuthContext';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const { login, isLoading } = useAuth();
+  const { login } = useAuth();
 
   function clearErrors() {
     if (errorMessage) setErrorMessage('');
@@ -40,6 +41,8 @@ export default function LoginScreen() {
       return;
     }
 
+    setLoading(true);
+
     try {
       await login(email, senha);
     } catch (error: any) {
@@ -48,6 +51,8 @@ export default function LoginScreen() {
       if (authError.fieldErrors) {
         setFieldErrors(authError.fieldErrors);
       }
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -120,7 +125,7 @@ export default function LoginScreen() {
               title="Entrar"
               onPress={handleLogin}
               fullWidth
-              loading={isLoading}
+              loading={loading}
             />
           </View>
 
